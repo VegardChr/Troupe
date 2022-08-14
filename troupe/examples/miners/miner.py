@@ -86,11 +86,11 @@ class Miner(BDIAgent):
             return
 
         # If we have been assigned a mine that we have no knowledge about.
-        if self.recollect_id(Mine, self.assigned_mine.uuid) is None:
+        if self.beliefs.find_id(Mine, self.assigned_mine.uuid) is None:
             # Look for the mine.
             mine_uuid = self.assigned_mine.uuid
             self.action_explore(
-                lambda: (self.recollect_id(Mine, mine_uuid) is not None),
+                lambda: (self.beliefs.find_id(Mine, mine_uuid) is not None),
                 "Find Assigned Mine",
             )
             return

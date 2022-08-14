@@ -106,12 +106,12 @@ class Worker(BDIAgent):
         """
 
         # Find the closest assembly.
-        closest_assembly = self.recollect_closest(Assembly)
+        closest_assembly = self.beliefs.find_closest(self, Assembly)
         # If no assembly can be found.
         if closest_assembly is None:
             # Explore until an assembly is found.
             self.action_explore(
-                lambda: bool(self.look(Assembly)),
+                lambda: bool(self.observations.find(Assembly)),
                 "Explore (Any Assembly)",
             )
             return
@@ -145,12 +145,12 @@ class Worker(BDIAgent):
 
         # If we have been assigned an assembly that we have no knowledge about.
         # (Chairman assigned an assembly to us, which we have never seen before.)
-        if (assembly := self.recollect_id(Assembly, self.assigned_assembly)) is None:
+        if (assembly := self.beliefs.find_id(Assembly, self.assigned_assembly)) is None:
 
             # Explore until the assembly is found.
             assembly_uuid = self.assigned_assembly
             self.action_explore(
-                lambda: bool(self.recollect_id(Assembly, assembly_uuid)),
+                lambda: bool(self.beliefs.find_id(Assembly, assembly_uuid)),
                 "Explore (Assigned Assembly)",
             )
             return
@@ -164,7 +164,7 @@ class Worker(BDIAgent):
         least_stocked = assembly.least_stocked
 
         # Find storage until that has least stocked component of assembly in stock.
-        candidates = self.recollect_where(
+        candidates = self.beliefs.find_where(
             Storage,
             lambda storage: storage.inventory.components[least_stocked] > 0,
         )
@@ -173,7 +173,7 @@ class Worker(BDIAgent):
         if not candidates:
             self.action_explore(
                 lambda: bool(
-                    self.look_where(
+                    self.observations.find_where(
                         Storage,
                         lambda storage: storage.inventory.components[least_stocked] > 0,
                     )

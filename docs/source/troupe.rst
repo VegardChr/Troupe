@@ -20,6 +20,7 @@ Submodules
    troupe.bdi_agent
    troupe.environment
    troupe.simulation
+   troupe.troupe
    troupe.quadtree
    troupe.typeutils
 

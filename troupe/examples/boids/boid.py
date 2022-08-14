@@ -33,7 +33,7 @@ class Boid(Agent):
 
     def update(self, environment: Environment, delta: float) -> None:
         Agent.update(self, environment, delta)
-        boids = self.look(Boid)
+        boids = self.observations.find(Boid)
 
         self.flocking(boids)
         self.wraparound(environment)

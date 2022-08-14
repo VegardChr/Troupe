@@ -38,11 +38,11 @@ class Director(Agent):
             environment: Environment the director is part of.
         """
 
-        if not (camps := self.look(Camp)):
+        if not (camps := self.observations.find(Camp)):
             return
-        if not (mines := self.look(Mine)):
+        if not (mines := self.observations.find(Mine)):
             return
-        if not (miners := self.look(Miner)):
+        if not (miners := self.observations.find(Miner)):
             return
 
         # Determine which mine miners should collect from to maximize profit/"value".

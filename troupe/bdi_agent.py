@@ -1,8 +1,7 @@
 """BDIAgent module."""
 
 from dataclasses import dataclass
-from typing import Callable, TypeVar, cast
-from uuid import UUID
+from typing import Callable, TypeVar
 
 from pygame import Surface, Vector2
 from pygame.font import Font
@@ -10,6 +9,7 @@ from pygame.font import Font
 from .actor import Actor
 from .agent import Agent
 from .environment import Environment
+from .troupe import Troupe
 from .typeutils import SupportsRichComparison
 
 ActorT = TypeVar("ActorT", bound=Actor)
@@ -101,7 +101,7 @@ class BDIAgent(Agent):
         self.reflexes: set["BDIAgent.Reflex"] = set()
 
         # Beliefs about other actors in the simulation.
-        self.beliefs: dict[type[Actor], set[Actor]] = {}
+        self.beliefs = Troupe()
 
     @property
     def intention(self) -> Desire:
@@ -142,134 +142,6 @@ class BDIAgent(Agent):
         # If the strength is less than the current intention's strength.
         # The intention setter will increase strength such that it becomes highest.
         self.intention = self.Desire(name, 0, plan)
-
-    def recollect(
-        self,
-        actor_type: type[ActorT],
-    ) -> list[ActorT]:
-        """
-        Recollect actors of a given type.
-
-        Note that recollect returns copies of actors,
-        as they were last observed and not the actors
-        (that are part of the environment) themselves.
-
-        Args:
-            actor_type: Type of the actor.
-
-        Returns:
-            Actors of the specified type.
-        """
-
-        if actor_type not in self.beliefs:
-            return []
-        return cast(list[ActorT], list(self.beliefs[actor_type]))
-
-    def recollect_where(
-        self,
-        actor_type: type[ActorT],
-        condition: Callable[[ActorT], bool],
-    ) -> list[ActorT]:
-        """
-        Recollect actors where a condition is satisfied.
-
-        Args:
-            actor_type: Type of the actor.
-            condition: Condition the actor must satisfy.
-
-        Returns:
-            Actors that satisfy the condition.
-        """
-
-        # Actors of the specified type.
-        candidates = self.recollect(actor_type)
-
-        # Actors that satisfy the condition.
-        return [candidate for candidate in candidates if condition(candidate)]
-
-    def recollect_id(
-        self,
-        actor_type: type[ActorT],
-        uuid: UUID,
-    ) -> ActorT | None:
-        """
-        Recollect actor with the given id.
-
-        Args:
-            actor_type: Type of the actor.
-            uuid: ID of the actor.
-
-        Returns:
-            Actor with the ID, if it was found.
-        """
-
-        candidates = self.recollect_where(actor_type, lambda actor: actor.uuid == uuid)
-
-        # Ensure that we did not find more than one actor with the ID.
-        assert (
-            len(candidates) <= 1
-        ), "Environment should only contain a single actor with the specified ID."
-
-        return candidates[0] if candidates else None
-
-    def recollect_min(
-        self,
-        actor_type: type[ActorT],
-        selector: Callable[[ActorT], SupportsRichComparison],
-    ) -> ActorT | None:
-        """
-        Recollect actor that has the the minimum value,
-        using the selector function.
-
-        Args:
-            actor_type: Type of the actor.
-            selector: Selector function.
-
-        Returns:
-            The actor of minimum value.
-        """
-        candidates = self.recollect(actor_type)
-        return min(candidates, key=selector) if candidates else None
-
-    def recollect_max(
-        self,
-        actor_type: type[ActorT],
-        selector: Callable[[ActorT], SupportsRichComparison],
-    ) -> ActorT | None:
-        """
-        Recollect actor that has the the maximum value,
-        using the selector function.
-
-        Args:
-            actor_type: Type of the actor.
-            selector: Selector function.
-
-        Returns:
-            The actor of maximum value.
-        """
-        candidates = self.recollect(actor_type)
-        return max(candidates, key=selector) if candidates else None
-
-    def recollect_closest(
-        self,
-        actor_type: type[ActorT],
-    ) -> ActorT | None:
-        """
-        Recollect the closest actor.
-
-        Args:
-            actor_type: Type of the actor.
-
-        Returns:
-            The closest actor.
-        """
-
-        return self.recollect_min(
-            actor_type,
-            lambda actor: self.position.distance_to(
-                actor.position,
-            ),
-        )
 
     def action_travel(
         self,
@@ -365,11 +237,11 @@ class BDIAgent(Agent):
             name: Name for the desire. Defaults to "Interact Any".
         """
 
-        candidates = self.recollect(target_type)
+        candidates = self.beliefs.find(target_type)
         if not candidates:
             # Explore in search of actor.
             self.action_explore(
-                lambda: bool(self.look(target_type)),
+                lambda: bool(self.observations.find(target_type)),
                 name=f"Explore ({str(target_type.__name__)})",
             )
             return
@@ -421,7 +293,7 @@ class BDIAgent(Agent):
             name: Name for the desire. Defaults to "Interact Where".
         """
 
-        if candidates := self.recollect_where(target_type, condition):
+        if candidates := self.beliefs.find_where(target_type, condition):
 
             # Interact with one of the candidates.
             self.action_interact_with(
@@ -449,7 +321,7 @@ class BDIAgent(Agent):
         """
 
         # Find closest actor.
-        target = self.recollect_min(target_type, selector)
+        target = self.beliefs.find_min(target_type, selector)
 
         # If prey does not know about any actor of the specified type.
         if target is None:
@@ -487,7 +359,7 @@ class BDIAgent(Agent):
         """
 
         # Find closest actor.
-        target = self.recollect_max(target_type, selector)
+        target = self.beliefs.find_max(target_type, selector)
 
         # If prey does not know about any actor of the specified type.
         if target is None:
@@ -539,7 +411,7 @@ class BDIAgent(Agent):
 
         # If agent no longer has any knowledge about the target,
         # we should stop trying to intract with it.
-        if self.recollect_id(type(target), target.uuid) is None:
+        if self.beliefs.find_id(type(target), target.uuid) is None:
             # NOTE: Excessive amounts of this warning MIGHT be an
             # indication that you are doing something wrong.
             # Feel free to comment out line if you know what you are doing!
@@ -550,7 +422,7 @@ class BDIAgent(Agent):
         # If target is a belief.
         if target.is_belief:
             # If target can not be observed.
-            if (actor := self.look_id(type(target), target.uuid)) is None:
+            if (actor := self.observations.find_id(type(target), target.uuid)) is None:
                 # Travel within observable distance of the target.
                 self.action_travel(
                     target.position,
@@ -583,28 +455,19 @@ class BDIAgent(Agent):
         Remove beliefs that are known to be invalid.
         """
 
-        # Beliefs about actors that should have been observed this tick.
-        beliefs = {
+        # Actors that were not observed, although our beliefs tell us that we should have.
+        difference = {
             belief
-            for beliefs in self.beliefs.values()
-            for belief in beliefs
-            if self.within_distance(belief.position, self.observable_distance)
-        }
-
-        # All actors that were observed this tick.
-        observations = [
-            observation
-            for observations in self.observations.values()
-            for observation in observations
-        ]
-
-        # Actors that were not observed,
-        # although our beliefs tell us that we should have.
-        difference = beliefs.difference(observations)
+            for belief in self.beliefs
+            if self.within_distance(
+                belief.position,
+                self.observable_distance,
+            )
+        }.difference(self.observations)
 
         # Remove invalid beliefs.
         for actor in difference:
-            self.beliefs[type(actor)].remove(actor)
+            self.beliefs.remove(actor)
 
     def update_beliefs(self) -> None:
         """
@@ -615,23 +478,15 @@ class BDIAgent(Agent):
         # NOTE: This does not work very well for actors that move.
         # Sometimes the actor does not maintain a belief about observed actor.
 
-        for actor_type, observations in self.observations.items():
+        # Update belief sets with newly aquired beliefs.
+        for observation in self.observations:
 
-            # Add key-value pair, if key (actor_type) does not exist in beliefs.
-            # (Ensure that there exists a belief set for every actor type.)
-            if actor_type not in self.beliefs:
-                self.beliefs[actor_type] = set()
+            # Create a copy of the observed actor.
+            actor_copy = observation.copy()
+            actor_copy.is_belief = True
 
-            # Update belief sets with newly aquired beliefs.
-            for observation in observations:
-                # Create a copy of the observed actor.
-                actor_copy = observation.copy()
-                actor_copy.is_belief = True
-
-                # Discard any existing belief.
-                self.beliefs[actor_type].discard(actor_copy)
-                # Add the new belief.
-                self.beliefs[actor_type].add(actor_copy)
+            # Add the new belief.
+            self.beliefs.add(actor_copy)
 
         # Invalidate beliefs that are not accurate.
         self.invalidate_beliefs()

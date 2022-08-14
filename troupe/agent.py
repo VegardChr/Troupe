@@ -1,16 +1,11 @@
 """Agent module."""
 
 
-from typing import Callable, TypeVar, cast
-from uuid import UUID
-
 from pygame import Surface, Vector2
 
 from .actor import Actor
 from .environment import Environment
-from .typeutils import SupportsRichComparison
-
-ActorT = TypeVar("ActorT", bound=Actor)
+from .troupe import Troupe
 
 
 class Agent(Actor):
@@ -47,132 +42,7 @@ class Agent(Actor):
         self.interactable_distance = interactable_distance
 
         # Actors observed (on this tick) by the agent.
-        self.observations: dict[type[Actor], set[Actor]] = {}
-
-    def look(
-        self,
-        actor_type: type[ActorT],
-    ) -> list[ActorT]:
-        """
-        Look for actors of a specific type.
-
-        Args:
-            actor_type: Type of the actors to look for.
-
-        Returns:
-            Actors of the specified type.
-        """
-
-        if actor_type not in self.observations:
-            return []
-
-        return cast(list[ActorT], list(self.observations[actor_type]))
-
-    def look_where(
-        self,
-        actor_type: type[ActorT],
-        condition: Callable[[ActorT], bool],
-    ) -> list[ActorT]:
-        """
-        Look for actors where a condition is satisifed.
-
-        Args:
-            actor_type: Type of the actors to look for.
-            condition: Condition the actors must satisfy.
-
-        Returns:
-            Actors that satisfy the condition.
-        """
-
-        # Actors of the specified type.
-        candidates = self.look(actor_type)
-
-        # Actors that satisfy the condition.
-        return [candidate for candidate in candidates if condition(candidate)]
-
-    def look_id(
-        self,
-        actor_type: type[ActorT],
-        uuid: UUID,
-    ) -> ActorT | None:
-        """
-        Look for actor that has the given id.
-
-        Args:
-            actor_type: Type of the actor.
-            uuid: ID of the actor.
-
-        Returns:
-            Actor with the ID, if it was found.
-        """
-
-        candidates = self.look_where(actor_type, lambda actor: actor.uuid == uuid)
-
-        # Ensure that we did not find more than one actor with the ID.
-        assert (
-            len(candidates) <= 1
-        ), "Environment should only contain a single actor with the specified ID."
-
-        return candidates[0] if candidates else None
-
-    def look_min(
-        self,
-        actor_type: type[ActorT],
-        selector: Callable[[ActorT], SupportsRichComparison],
-    ) -> ActorT | None:
-        """
-        Look for the actor that has the the minimum value,
-        using the selector function.
-
-        Args:
-            actor_type: Type of the actor.
-            selector: Selector function.
-
-        Returns:
-            The actor of minimum value.
-        """
-
-        candidates = self.look(actor_type)
-        return min(candidates, key=selector) if candidates else None
-
-    def look_max(
-        self,
-        actor_type: type[ActorT],
-        selector: Callable[[ActorT], SupportsRichComparison],
-    ) -> ActorT | None:
-        """
-        Look for the actor that has the the maximum value,
-        using the selector function.
-
-        Args:
-            actor_type: Type of the actor.
-            selector: Selector function.
-
-        Returns:
-            The actor of maximum value.
-        """
-
-        candidates = self.look(actor_type)
-        return max(candidates, key=selector) if candidates else None
-
-    def look_closest(
-        self,
-        actor_type: type[ActorT],
-    ) -> ActorT | None:
-        """
-        Look for the closest actor.
-
-        Args:
-            actor_type: Type of the actor.
-
-        Returns:
-            The closest actor.
-        """
-
-        return self.look_min(
-            actor_type,
-            lambda actor: self.position.distance_to(actor.position),
-        )
+        self.observations = Troupe()
 
     def observe(self, environment: Environment) -> None:
         """
@@ -194,11 +64,7 @@ class Agent(Actor):
 
         # Update observations.
         for actor in actors:
-            if type(actor) not in self.observations:
-                self.observations[type(actor)] = set()
-            if actor in self.observations[type(actor)]:
-                self.observations[type(actor)].remove(actor)
-            self.observations[type(actor)].add(actor)
+            self.observations.add(actor)
 
     def can_observe(self, actor: Actor) -> bool:
         """

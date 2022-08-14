@@ -14,7 +14,7 @@ class MinerEnv(Environment):
     """
 
     def __init__(self, size: tuple[int, int] = (1280, 720)) -> None:
-        super().__init__(size)
+        Environment.__init__(self, size)
 
         self.actors.append(
             Director(self.available_spot(Director.base_image.get_size())),

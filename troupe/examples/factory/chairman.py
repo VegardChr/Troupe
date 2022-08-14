@@ -63,7 +63,7 @@ class Chairman(Agent):
         """
 
         # Assemblies observed by the chairman.
-        assemblies = self.look(Assembly)
+        assemblies = self.observations.find(Assembly)
 
         # Return if the chairman observed no assemblies.
         if not assemblies:
@@ -81,7 +81,7 @@ class Chairman(Agent):
         """
 
         # The assembly that has spent the most time waiting.
-        assembly = self.look_max(Assembly, lambda assembly: assembly.total_idle_time)
+        assembly = self.observations.find_max(Assembly, lambda assembly: assembly.total_idle_time)
 
         # Return if the chairman observed no assemblies.
         if assembly is None:
@@ -104,7 +104,7 @@ class Chairman(Agent):
         self.reassignment_timer = self.reassignment_interval
 
         # All workers observed by the chairman.
-        workers = self.look(Worker)
+        workers = self.observations.find(Worker)
 
         # Return if the chairman observed no workers.
         if not workers:
